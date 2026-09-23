@@ -1,6 +1,8 @@
 # 004: Static artifact string encryption (--enc-strings)
 
-**Layer:** build pipeline · **Status:** open · **Priority:** P2 · **Depends on:** —
+**Layer:** build pipeline · **Status:** done 2026-09-23 (suite 10/10; artifact
+verified: no URI/UA/hb-header/key/template strings; live e2e via encrypted
+bake, MDE clean) · **Priority:** P2 · **Depends on:** —
 
 ## Goal
 The built payload today is minified + token-renamed + comment-stripped, but

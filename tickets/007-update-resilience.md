@@ -3,9 +3,9 @@
 **Layer:** delivery · **Status:** open · **Priority:** P2 · **Depends on:** 005
 
 ## Goal
-Squirrel/NSIS updates replace the app directory (Discord) or the asar
-(VS Code) — the hook dies silently on update. Define the operator workflow
-and make re-injection safe.
+App updates kill the hook silently: Squirrel replaces the whole versioned
+dir (GitHub Desktop), NSIS rewrites the asar in place (VS Code). Define the
+operator workflow and make re-injection safe.
 
 ## Scope
 - `inject_unpacked.js` / `inject_asar.js`: detect an already-hooked target
@@ -24,4 +24,5 @@ and make re-injection safe.
 ## Acceptance
 - Re-running an injector on an already-hooked app is a clean no-op;
   `--clean` + re-inject restores the beacon after a simulated update
-  (copy fresh Discord dir over) on DT-MDE-TEST; MDE clean.
+  (copy a fresh VS Code install over the hooked one) on DT-MDE-TEST;
+  MDE clean.

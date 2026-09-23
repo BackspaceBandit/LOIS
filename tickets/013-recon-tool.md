@@ -35,6 +35,7 @@ Zero-dep Node script, read-only on the target dir. Results writable as a
 - create: `docs/targets/` (seeded from 005's Discord findings)
 
 ## Acceptance
-- Correctly classifies the three lab apps (Discord → unpacked route,
-  VS Code → asar route, GitHub Desktop → whichever its fuses say) on
-  DT-MDE-TEST; correct "not Electron" verdict on a non-Electron control.
+- Correctly classifies the lab apps on DT-MDE-TEST (VS Code → expected asar
+  route; GitHub Desktop → whichever its fuses say; Discord → unpacked route,
+  kept as the fused reference); correct "not Electron" verdict on a
+  non-Electron control.

