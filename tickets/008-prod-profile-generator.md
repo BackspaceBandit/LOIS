@@ -1,6 +1,21 @@
 # 008: Production listener profile pack generator
 
-**Layer:** C2 profile/infra · **Status:** open · **Priority:** P1 · **Depends on:** —
+**Layer:** C2 profile/infra · **Status:** done 2026-09-23 (generated pack
+validated live vs AdaptixTest: listener create → register → pwd round-trip;
+URI gating + 404 error page verified) · **Priority:** P1 · **Depends on:** —
+
+## Outcome notes
+- `scripts/gen_profile.js` renders listener.json + bake.json +
+  nginx-location.conf + NOTES.md from one op file; enforces prod minimums
+  (sleep>=60, jitter>=20, no signatured hb header) unless `"lab": true`.
+- Generated packs land in `ops/<name>/` and are gitignored (they contain
+  keys); `ops/example.json` is the committed template.
+- Validated with lab pack `labtest2` (listener `loistest2`, :8446, URI
+  /api/v2/telemetry): agent 15 registered + pwd round-trip OK; wrong-URI
+  and bad-beat requests get the 404 profile page. loistest2 stopped after
+  validation.
+- Known limitation recorded: LOIS uses bake `uri[0]` only (no multi-URI
+  rotation agent-side yet).
 
 ## Goal
 Lab profile (plain HTTP, `/content.html`, 5 s sleep) must never reach prod.
