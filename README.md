@@ -67,8 +67,16 @@ env at all (sidecar/baked config).
       survives ssh teardown); zero MDE detections. Note: REST tasking needs
       `"ui": false` — `ui: true` turns tasks into TASK_TYPE_BROWSER which is
       deliberately silent (no console/task-list persistence).
-- [ ] ELECTRON_RUN_AS_NODE launcher-persistence helper (Run key / schtask)
+- [ ] NaX HTTP channel transport (opsec upgrade over stock BeaconHTTP) —
+      ticket 014
+- [ ] SOCKS5 pivot over the tunnel channel — ticket 015
+- [ ] ELECTRON_RUN_AS_NODE launcher-persistence helper (Run key / schtask;
+      lab/permissive targets only — forbidden on CS targets by ticket 006) —
+      ticket 017
 - [ ] optional COFF/BOF addon (non-Airlock targets only — native .node loads
-      are exactly what Airlock blocks; keep it OUT of the default build)
-- [ ] operator relay (push WS + SOCKS pivot) — YADDA-proven pattern, deferred
+      are exactly what Airlock blocks; keep it OUT of the default build) —
+      ticket 016
 - [ ] `node_agent`-style teamserver extender for GUI/REST payload generation
+      — ticket 018
+
+Opsec hardening plan (CS prod): see `tickets/README.md` (001–013).
