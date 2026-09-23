@@ -196,6 +196,34 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok('encrypted bake round-trip vs mock (004)');
   }
 
+  // 6d. injector: hook append + payload copy + --clean residue-free (005)
+  {
+    const os = require('os');
+    const fake = fs.mkdtempSync(path.join(os.tmpdir(), 'lw-fakeapp-'));
+    const resDir = path.join(fake, 'resources');
+    fs.mkdirSync(path.join(resDir, 'app', 'out'), { recursive: true });
+    fs.writeFileSync(path.join(resDir, 'app', 'out', 'main.js'), 'console.log("host main");\n');
+    const r = spawnSync(NODE, [path.join(ROOT, 'scripts', 'inject_unpacked.js'),
+                               '--app', resDir, '--payload', path.join(ROOT, 'dist', 'testbundle.js'),
+                               '--name', 'support', '--target', 'app/out/main.js'], { encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, r.stderr + r.stdout);
+    let main = fs.readFileSync(path.join(resDir, 'app', 'out', 'main.js'), 'utf8');
+    assert.ok(main.includes('@@lw') && main.includes("import('file:///'"), 'hook appended');
+    // ESM mains (VS Code >=1.139) have no require() — the hook must use import()
+    assert.ok(!main.includes('require(process.resourcesPath'), 'hook uses require() — breaks ESM mains');
+    assert.ok(fs.existsSync(path.join(resDir, 'support.js')), 'payload copied');
+    const c = spawnSync(NODE, [path.join(ROOT, 'scripts', 'inject_unpacked.js'),
+                               '--app', resDir, '--name', 'support', '--target', 'app/out/main.js', '--clean'],
+                        { encoding: 'utf8' });
+    assert.strictEqual(c.status, 0, c.stderr + c.stdout);
+    main = fs.readFileSync(path.join(resDir, 'app', 'out', 'main.js'), 'utf8');
+    assert.ok(!main.includes('@@lw'), 'hook removed by --clean');
+    assert.ok(!fs.existsSync(path.join(resDir, 'support.js')), 'payload removed by --clean');
+    assert.ok(!fs.existsSync(path.join(resDir, 'support.json')), 'sidecar removed by --clean');
+    fs.rmSync(fake, { recursive: true, force: true });
+    ok('injector hook + clean round-trip (005)');
+  }
+
   // 7. full round-trip: mock listener + built bundle agent
   {
     const port = 21000 + (process.pid % 20000);

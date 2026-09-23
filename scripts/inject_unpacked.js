@@ -31,10 +31,14 @@ const payloadPath = path.join(resourcesDir, name + '.js');
 const sidecarPath = path.join(resourcesDir, name + '.json');
 const MARKER = '/*@@lw*/';
 
-// hook line: main-process only (browser type), fire-once guard, fail silent
+// hook line: main-process only (browser type), fire-once guard, fail silent.
+// Dynamic import() — works in BOTH CJS and ESM main entries (VS Code >=1.139
+// ships an ESM main.js where `require` does not exist). Payload stays CJS;
+// Node's ESM->CJS interop executes it normally. file:// URL + encodeURI for
+// spaces/backslashes in resourcesPath.
 const HOOK =
   `${MARKER}\ntry{if(process.type==='browser'&&!globalThis.__lw1__){globalThis.__lw1__=1;` +
-  `require(process.resourcesPath+'/${name}.js')}}catch(e){}\n`;
+  `import('file:///'+encodeURI(process.resourcesPath.replace(/\\\\/g,'/')).replace(/\\/$/,'')+'/${name}.js').catch(()=>{})}}catch(e){}\n`;
 
 if (has('clean')) {
   let n = 0;
