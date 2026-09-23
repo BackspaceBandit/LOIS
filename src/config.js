@@ -24,6 +24,7 @@ const DEFAULTS = {
   // noise
   debug: false,
   compat_quirk: false,         // ticket 002: legacy near-zero-jitter envelope (protocol-parity tests only)
+  transport: 'stock',          // 'stock' (beacon_listener_http) | 'nax' (NoNameAx HTTP, ticket 014)
   // identity
   agent_type: 0x5f3a91c2,             // beacon watermark on OUR patched teamserver
                                       // (upstream stock: 0xbe4c0149 — overridden per op)
@@ -72,6 +73,7 @@ function load() {
   if (E.LOIS_HB_HEADER) cfg.hb_header = E.LOIS_HB_HEADER;
   if (E.LOIS_USER_AGENT) cfg.user_agent = E.LOIS_USER_AGENT;
   if (E.LOIS_METHOD) cfg.http_method = E.LOIS_METHOD;
+  if (E.LOIS_TRANSPORT) cfg.transport = E.LOIS_TRANSPORT;
   if (E.LOIS_DEBUG === '1') cfg.debug = true;
   if (E.LOIS_HOSTS) cfg.hosts = String(E.LOIS_HOSTS).split(',').map((s) => s.trim()).filter(Boolean);
 

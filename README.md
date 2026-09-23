@@ -74,8 +74,9 @@ Docs: `docs/opsec.md` (read before prod), `docs/runbook.md` (re-injection),
       survives ssh teardown); zero MDE detections. Note: REST tasking needs
       `"ui": false` — `ui: true` turns tasks into TASK_TYPE_BROWSER which is
       deliberately silent (no console/task-list persistence).
-- [ ] NaX HTTP channel transport (opsec upgrade over stock BeaconHTTP) —
-      ticket 014
+- [x] NaX HTTP channel transport (opsec upgrade over stock BeaconHTTP) —
+      ticket 014 (done 2026-09-24: full channel incl. PROFILE apply + jquery
+      profile live vs testhttp2 from DT-MDE-TEST, MDE clean)
 - [x] SOCKS5 pivot over the tunnel channel — ticket 015 (done 2026-09-23:
       connect/write/pause/resume/close, live pivot through an MDE-box beacon)
 - [ ] ELECTRON_RUN_AS_NODE launcher-persistence helper (Run key / schtask;

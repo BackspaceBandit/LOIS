@@ -449,5 +449,52 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok('SOCKS5 tunnel channel: connect/write/close (015)');
   }
 
+  // 10. ticket 014: NaX transport round-trip (register/pwd/mkdir/ls)
+  {
+    const port = 26000 + (process.pid % 10000);
+    const tf = path.join(__dirname, '.nax.ndjson');
+    fs.writeFileSync(tf, '');
+    const mock = spawn(NODE, [path.join(__dirname, 'mock_nax.js'), '--tasks', tf],
+      { env: { ...process.env, LISTEN_PORT: String(port), LISTEN_HB: 'X-Request-Id' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let mout = '';
+    mock.stdout.on('data', (d) => { mout += d; });
+    mock.stderr.on('data', (d) => { mout += d; });
+    await sleep(600);
+    assert.ok(mout.includes('[mock-nax] listening'), 'mock-nax up: ' + mout);
+
+    const agent = spawn(NODE, [path.join(ROOT, 'dist', 'testbundle.js')], {
+      env: { ...process.env, LW_TRANSPORT: 'nax', LW_HOST: '127.0.0.1', LW_PORT: String(port),
+             LW_SSL: '0', LW_SLEEP: '1', LW_JITTER: '0', LW_MAX_CYCLES: '30' },
+      stdio: ['ignore', 'pipe', 'pipe'] });
+    let aout = '';
+    agent.stdout.on('data', (d) => { aout += d; });
+    agent.stderr.on('data', (d) => { aout += d; });
+
+    const dl = Date.now() + 10000;
+    while (Date.now() < dl && !mout.includes('[nax-reg]')) await sleep(200);
+    assert.ok(mout.includes('[nax-reg]'), 'nax registration: ' + mout + '\nagent: ' + aout);
+
+    fs.writeFileSync(tf, JSON.stringify({ cmd: 21 }) + '\n');                    // pwd
+    let dl2 = Date.now() + 8000;
+    while (Date.now() < dl2 && !mout.includes('pwd=')) await sleep(200);
+    assert.ok(mout.includes('pwd='), 'nax pwd round-trip: ' + mout);
+
+    fs.writeFileSync(tf, JSON.stringify({ cmd: 22, path: 'lwnax-dir' }) + '\n'); // mkdir
+    dl2 = Date.now() + 8000;
+    while (Date.now() < dl2 && !mout.includes('mkdir ok')) await sleep(200);
+    assert.ok(mout.includes('mkdir ok'), 'nax mkdir round-trip: ' + mout);
+
+    fs.writeFileSync(tf, JSON.stringify({ cmd: 25, path: '.' }) + '\n');         // ls
+    dl2 = Date.now() + 8000;
+    while (Date.now() < dl2 && !mout.includes('ls entries=')) await sleep(200);
+    assert.ok(mout.includes('ls entries='), 'nax ls round-trip: ' + mout);
+
+    try { agent.kill('SIGKILL'); } catch (_) {}
+    mock.kill('SIGKILL');
+    fs.rmSync(tf, { force: true });
+    fs.rmSync(path.join(process.cwd(), 'lwnax-dir'), { recursive: true, force: true });
+    ok('NaX transport round-trip (register/pwd/mkdir/ls) (014)');
+  }
+
   console.log(`\n${passed} passed`);
 })().catch((e) => { console.error('FAIL:', e); process.exit(1); });

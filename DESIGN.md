@@ -57,3 +57,31 @@ reference only; no YADDA code is imported.
 comment strip → log-line strip → per-build token rename (`--fixed-tokens` for
 tests/dev) → optional esbuild minify → denylist gate. Denylist failure =
 failed build. The `<<<PAYLOAD_DATA>>>` marker is protocol-required and exempt.
+
+## NaX HTTP channel (src/nhttp.js, ticket 014)
+
+Second transport, selected by `"transport": "nax"` in the bake. Wire summary
+(canonical: NaX/src_server/listener_nonameax_http + agent_nonameax):
+
+- All integers little-endian. Frame = type(1)|flags(1)|bodylen(u32)|body;
+  envelope = IV(16)||AES-128-CBC-PKCS7(frame, encrypt_key). No per-session key.
+- REGISTER (0x01, lp16 identity fields) POSTed RAW to post_uris[0]
+  (pre-profile fallback); server answers a PROFILE (0x82) frame — full v2
+  profile (URIs/UA/headers/encodings/rotation), parsed and applied. Hosts from
+  the profile are deliberately NOT adopted (baked redirector hosts win).
+- Steady state: HEARTBEAT (0x02, empty body) GET, envelope transformed per
+  get.client_meta (format raw/b64/b64url/hex, 4-byte XOR mask, placement
+  body/header/cookie/parameter, prepend/append). Tasks: TASK (0x81) frames in
+  the GET reply; NO_TASKS (0x80) ends the walk; verbatim EmptyResp also
+  accepted (the Go parser drops `empty_response` keys — then NO_TASKS arrives
+  encrypted instead; both handled).
+- Results: one RESULT (0x03) frame per task, POSTed per post.client_output
+  (body placement). **Post.ClientMeta carries only the 16-char session id,
+  never the envelope** (ignored server-side).
+- Beacon id = 8 random bytes hex (16 ascii) in the beacon-id header
+  (default X-Correlation-Id; bake `hb_header`).
+- Command layer: NaX cmd ids (whoami 0x10 ... profile 0x30), structured
+  LS/PS_LIST formats, chunked DOWNLOAD (start/continue/finish),
+  SAVEMEMORY+UPLOAD two-phase push. Unknown commands no-op silently.
+- Cadence: NaxSleep = sleep_ms ± jitter% uniform; immediate re-poll while
+  results/downloads are pending (C parity).

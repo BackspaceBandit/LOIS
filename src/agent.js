@@ -173,6 +173,7 @@ function rotateEndpoint(cfg, logFn) {
 
 async function run() {
   const cfg = load();
+  if (cfg.transport === 'nax') return require('./nhttp').run(cfg); // ticket 014
   QUIET = !cfg.debug;
   const info = hostInfo(cfg);
   let sessionKey;
