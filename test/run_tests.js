@@ -400,5 +400,54 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok('fs error frame (cat unreadable path)');
   }
 
+  // 9. ticket 015: SOCKS5 tunnel channel — connect/write/close over the beat
+  {
+    const net = require('net');
+    const echoPort = 25000 + (process.pid % 20000);
+    const echo = net.createServer((s) => s.pipe(s));
+    await new Promise((r) => echo.listen(echoPort, '127.0.0.1', r));
+
+    const port = 24500 + (process.pid % 20000);
+    const tf = path.join(__dirname, '.tunnel.ndjson');
+    fs.writeFileSync(tf, '');
+    const mock = spawn(NODE, [path.join(__dirname, 'mock_listener.js'), '--tasks', tf],
+      { env: { ...process.env, LISTEN_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let mout = '';
+    mock.stdout.on('data', (d) => { mout += d; });
+    mock.stderr.on('data', (d) => { mout += d; });
+    await sleep(500);
+    const agent = spawn(NODE, [path.join(ROOT, 'dist', 'testbundle.js')], {
+      env: { ...process.env, LW_HOST: '127.0.0.1', LW_PORT: String(port),
+             LW_SSL: '0', LW_SLEEP: '1', LW_JITTER: '0', LW_MAX_CYCLES: '25' },
+      stdio: ['ignore', 'pipe', 'pipe'] });
+    let aout = '';
+    agent.stdout.on('data', (d) => { aout += d; });
+    agent.stderr.on('data', (d) => { aout += d; });
+    const dl = Date.now() + 10000;
+    while (Date.now() < dl && !mout.includes('[reg] NEW agent')) await sleep(200);
+    assert.ok(mout.includes('[reg] NEW agent'), 'tunnel-test registration: ' + mout + aout);
+
+    fs.writeFileSync(tf, JSON.stringify({ cmd: 62, channelId: 0xabc, type: 1, addr: '127.0.0.1', port: echoPort }) + '\n');
+    let dl2 = Date.now() + 8000;
+    while (Date.now() < dl2 && !mout.includes('tunnel-status type=1 result=0')) await sleep(200);
+    assert.ok(mout.includes('tunnel-status type=1 result=0'), 'tunnel connect status: ' + mout);
+
+    fs.writeFileSync(tf, JSON.stringify({ cmd: 64, channelId: 0xabc, data: Buffer.from('hello pivot').toString('base64') }) + '\n');
+    dl2 = Date.now() + 8000;
+    while (Date.now() < dl2 && !mout.includes('tunnel-data 11B: hello pivot')) await sleep(200);
+    assert.ok(mout.includes('tunnel-data 11B: hello pivot'), 'tunnel data round-trip: ' + mout);
+
+    fs.writeFileSync(tf, JSON.stringify({ cmd: 66, channelId: 0xabc }) + '\n');
+    await sleep(2500);
+    // agent must still be alive and beating after the close
+    assert.strictEqual(agent.exitCode, null, 'agent died on tunnel close: ' + aout);
+    assert.ok(!aout.includes('fatal'), 'fatal print: ' + aout);
+    try { agent.kill('SIGKILL'); } catch (_) {}
+    mock.kill('SIGKILL');
+    echo.close();
+    fs.rmSync(tf, { force: true });
+    ok('SOCKS5 tunnel channel: connect/write/close (015)');
+  }
+
   console.log(`\n${passed} passed`);
 })().catch((e) => { console.error('FAIL:', e); process.exit(1); });

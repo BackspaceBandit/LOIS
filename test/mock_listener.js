@@ -37,6 +37,10 @@ function packTaskLE(t) {
   if (t.cmd === 32) { str(t.path); u32(t.fileId || 7); }
   if (t.cmd === 21) { u32(t.sub); if (t.sub === 1) { u32(t.sleep); u32(t.jitter); } if (t.sub === 3 || t.sub === 4) u32(t.value || 0); }
   if (t.cmd === 10) u32(t.method || 0);
+  // tunnel tasks (015): connect / write / close
+  if (t.cmd === 62) { u32(t.channelId); u32(t.type || 1); str(t.addr || '127.0.0.1'); u32(t.port); }
+  if (t.cmd === 64) { const d = Buffer.from(t.data || '', 'base64'); u32(t.channelId); u32(d.length); parts.push(d); }
+  if (t.cmd === 66 || t.cmd === 69 || t.cmd === 70) u32(t.channelId);
   u32(++taskSeq);
   return Buffer.concat(parts);
 }
@@ -58,23 +62,25 @@ function decodeReplies(rawBody, key) {
   const total = dec.readUInt32BE(0);
   let pos = 4;
   const end = Math.min(dec.length, total);
+  // walk frames; known layouts advance the cursor, unknown ones stop the walk
   while (pos + 8 <= end) {
-    const taskId = dec.readUInt32BE(pos); pos += 4;
+    const taskId = dec.readUInt32BE(pos); pos += 4;   // taskId slot — tunnels carry channelId here
     const cmd = dec.readUInt32BE(pos); pos += 4;
-    // print what we can; known layouts get string extraction
     let note = '';
     try {
-      if (cmd === 4) { const n = dec.readUInt32BE(pos); note = 'cwd=' + dec.subarray(pos + 4, pos + 4 + n).toString('utf8'); }
-      else if (cmd === 27) { const n = dec.readUInt32BE(pos); note = 'mkdir=' + dec.subarray(pos + 4, pos + 4 + n).toString('utf8'); }
-      else if (cmd === 24) { const n = dec.readUInt32BE(pos); const p = dec.subarray(pos + 4, pos + 4 + n).toString('utf8'); note = 'cat=' + p; }
-      else if (cmd === 21) note = 'profile sub=' + dec.readUInt32BE(pos);
-      else if (cmd === 14) note = 'ls ok=' + dec[pos];
-      else if (cmd === 32) note = 'download fid=' + dec.readUInt32BE(pos) + ' state=' + dec[pos + 4];
-      else if (cmd === 10) note = 'terminated';
-    } catch (_) {}
+      if (cmd === 4) { const n = dec.readUInt32BE(pos); note = 'cwd=' + dec.subarray(pos + 4, pos + 4 + n).toString('utf8'); pos += 4 + n; }
+      else if (cmd === 27) { const n = dec.readUInt32BE(pos); note = 'mkdir=' + dec.subarray(pos + 4, pos + 4 + n).toString('utf8'); pos += 4 + n; }
+      else if (cmd === 24) { const n = dec.readUInt32BE(pos); const p = dec.subarray(pos + 4, pos + 4 + n).toString('utf8'); note = 'cat=' + p; pos += 4 + n; const n2 = dec.readUInt32BE(pos); pos += 4 + n2; }
+      else if (cmd === 21) { note = 'profile sub=' + dec.readUInt32BE(pos); pos = end; }
+      else if (cmd === 14) { note = 'ls ok=' + dec[pos]; pos = end; }
+      else if (cmd === 10) { note = 'terminated'; pos = end; }
+      else if (cmd === 32) { note = 'download fid=' + dec.readUInt32BE(pos) + ' state=' + dec[pos + 4]; pos = end; }
+      else if (cmd === 62) { const type = dec.readUInt32BE(pos); const res = dec.readUInt32BE(pos + 4); pos += 8; note = `tunnel-status type=${type} result=${res}`; }
+      else if (cmd === 64) { const n = dec.readUInt32BE(pos); const d = dec.subarray(pos + 4, pos + 4 + n); pos += 4 + n; note = `tunnel-data ${n}B: ${d.toString('utf8').slice(0, 60)}`; }
+      else if (cmd === 66 || cmd === 69 || cmd === 70) { note = `tunnel-ctl channel=0x${taskId.toString(16)}`; }
+      else { note = '(unknown frame — stop walk)'; console.log(`[reply] task=0x${taskId.toString(16)} cmd=${cmd} ${note}`); break; }
+    } catch (_) { console.log(`[reply] task=0x${taskId.toString(16)} cmd=${cmd} (parse stop)`); break; }
     console.log(`[reply] task=0x${taskId.toString(16)} cmd=${cmd} ${note}`);
-    pos = end; // we don't walk mixed frames precisely — tests use one task per tick
-    break;
   }
 }
 

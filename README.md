@@ -76,7 +76,8 @@ Docs: `docs/opsec.md` (read before prod), `docs/runbook.md` (re-injection),
       deliberately silent (no console/task-list persistence).
 - [ ] NaX HTTP channel transport (opsec upgrade over stock BeaconHTTP) —
       ticket 014
-- [ ] SOCKS5 pivot over the tunnel channel — ticket 015
+- [x] SOCKS5 pivot over the tunnel channel — ticket 015 (done 2026-09-23:
+      connect/write/pause/resume/close, live pivot through an MDE-box beacon)
 - [ ] ELECTRON_RUN_AS_NODE launcher-persistence helper (Run key / schtask;
       lab/permissive targets only — forbidden on CS targets by ticket 006) —
       ticket 017

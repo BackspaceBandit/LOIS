@@ -1,6 +1,25 @@
 # 015: SOCKS5 pivot over the tunnel channel
 
-**Layer:** capability · **Status:** open · **Priority:** P2 · **Depends on:** 001 (no new child_process), 003
+**Layer:** capability · **Status:** done 2026-09-23 (suite 19/19 incl. tunnel
+connect/write/close; live e2e: socks5 pivot through the MDE-box beacon to the
+internet, HTTP 301 via 1.1.1.1; MDE clean) · **Priority:** P2 · **Depends on:** 001 (no new child_process), 003
+
+## Outcome notes
+- `src/tunnel.js`: TCP channels (connect/write/pause/resume/close), status
+  frames in the taskId-slot framing the server expects, WSA error mapping
+  (10061/10060/10065 → proper SOCKS5 reply codes client-side), C++ watermark
+  backpressure (4 MB pause / 1 MB resume / 16 MB cap), sockets `unref`'d and
+  torn down on agent exit.
+- Frames flush into EVERY beat (task replies and quiet ticks), so pivot data
+  flows without waiting for tasks.
+- Live test notes: `/tunnel/start/socks5` needs `"listen": true` to bind the
+  socks port ON the teamserver (default false = bind on a connected GUI
+  client — nothing binds with API-only operation). Stop param is
+  `p_tunnel_id`.
+- Expected pivot latency with sleep 5 ≈ 25-30 s per request (several beat
+  round-trips per connect+response) — interactive tooling works, bulk
+  transfer does not. Lower sleep while tunneling, or live with it.
+- Deferred (as written in the ticket): UDP, reverse tunnels, WS push relay.
 
 ## Why
 Pure-JS Node can open arbitrary TCP (`net` module) — a SOCKS pivot turns a

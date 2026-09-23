@@ -33,6 +33,10 @@ class TaskReader {
   u8()  { if (this.pos + 1 > this.end) throw new Error('task stream underrun'); return this.buf[this.pos++]; }
   raw() { const n = this.u32(); if (this.pos + n > this.end) throw new Error('task stream underrun'); const b = this.buf.subarray(this.pos, this.pos + n); this.pos += n; return b; }
   str() { let b = this.raw(); while (b.length && b[b.length - 1] === 0) b = b.subarray(0, b.length - 1); return b.toString('utf8'); }
+  take(n) { // N raw bytes, no length prefix (tunnel write payloads)
+    if (this.pos + n > this.end) throw new Error('task stream underrun');
+    const b = this.buf.subarray(this.pos, this.pos + n); this.pos += n; return b;
+  }
 }
 
 class OutPacker {
