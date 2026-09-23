@@ -8,8 +8,13 @@
 // Task line: {"cmd":4} (pwd) | {"cmd":14,"path":"."} (ls) | {"cmd":24,"path":..}
 //   {"cmd":21,"sub":1,"sleep":10,"jitter":5} | {"cmd":10,"method":0} (terminate)
 //   {"cmd":32,"path":..,"fileId":7} (download) | {"cmd":27,"path":..} (mkdir)
+// CHAOS env (fault injection, ticket 003): "reset" = destroy socket on every
+// request | "garbage" = 200 with random body | "badkey" = task blob encrypted
+// with the wrong session key | "badtask" = truncated task stream
+const CHAOS = process.env.CHAOS || '';
 const http = require('http');
 const fs = require('fs');
+const crypto = require('crypto');
 const { rc4 } = require('../src/rc4');
 const { Unpacker } = require('../src/packer');
 
@@ -74,6 +79,8 @@ function decodeReplies(rawBody, key) {
 }
 
 const srv = http.createServer((req, res) => {
+  if (CHAOS === 'reset') { req.socket.destroy(); return; }
+  if (CHAOS === 'garbage') { res.statusCode = 200; return res.end(crypto.randomBytes(64)); }
   const hb = req.headers[HB.toLowerCase()];
   if (!hb) { res.statusCode = 404; return res.end('not found'); }
   let plain;
@@ -104,8 +111,9 @@ const srv = http.createServer((req, res) => {
   req.on('end', () => {
     const body = Buffer.concat(chunks);
     if (body.length) decodeReplies(body, sessions.get(agentId).key);
-    const tasks = drainTasks();
-    const blob = rc4(tasks, sessions.get(agentId).key);
+    let tasks = drainTasks();
+    if (CHAOS === 'badtask' && tasks.length > 8) tasks = tasks.subarray(0, tasks.length - 3); // truncated stream
+    const blob = CHAOS === 'badkey' ? rc4(tasks, Buffer.alloc(16, 0xee)) : rc4(tasks, sessions.get(agentId).key);
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     // splice RAW bytes — res.end(string) would utf8-encode and corrupt the blob

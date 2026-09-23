@@ -1,6 +1,21 @@
 # 003: Crash containment audit + fault-injection tests
 
-**Layer:** core runtime · **Status:** open · **Priority:** P1 · **Depends on:** —
+**Layer:** core runtime · **Status:** done 2026-09-23 (suite 16/16; fault
+tests: reset/garbage/badkey/badtask/EACCES all survived) · **Priority:** P1 · **Depends on:** —
+
+## Outcome notes
+- Real bug found: the HTTP response stream had no `error` handler — a server
+  dying mid-body would throw an uncaughtException **in the host app's main
+  process**. Fixed in `request()`.
+- `hostInfo` probes (`os.userInfo/hostname/networkInterfaces/release/type`)
+  are all guarded now.
+- Pre-existing hygiene gap found via the new assertions: several `log()`
+  call sites were mid-line and survived stripping, and esbuild does not
+  reliably DCE the unused helper — hygiene now physically removes the
+  `log`/`ts` helper definitions and the dev-only fatal print; suite asserts
+  zero `console.*`/log-message strings in the artifact.
+- `MAX_CYCLES` env knob renamed into the per-build prefix scheme
+  (`LOIS_MAX_CYCLES` → random prefix per build).
 
 ## Goal
 Injected, we share the host app's main process. One unguarded throw = host

