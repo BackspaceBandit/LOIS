@@ -106,6 +106,31 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok('task framing LE/BE');
   }
 
+  // 5b. ticket 002: real jitter envelope + legacy quirk + working-hours math
+  {
+    const { jittered, workingSleepSec } = require('../src/agent');
+    // real jitter: sleep=30s jitter=50% → [15000, 30000] ms
+    for (let i = 0; i < 300; i++) {
+      const v = jittered({ sleep_delay: 30, jitter_delay: 50 });
+      assert.ok(v >= 15000 && v <= 30000, 'real jitter out of envelope: ' + v);
+    }
+    // legacy quirk (compat_quirk): noise is seconds-scale → [30000-14, 30000]
+    for (let i = 0; i < 100; i++) {
+      const v = jittered({ sleep_delay: 30, jitter_delay: 50, compat_quirk: true });
+      assert.ok(v <= 30000 && v >= 29900, 'quirk envelope wrong: ' + v);
+    }
+    // working window 09:00–17:30 (packed: startH|startM|endH|endM)
+    const wt = ((9 << 24) | (0 << 16) | (17 << 8) | 30) >>> 0;
+    const at = (h, m, s = 0) => new Date(2026, 8, 23, h, m, s);
+    assert.strictEqual(workingSleepSec({ working_time: wt }, at(12, 0)), 0);       // inside
+    assert.strictEqual(workingSleepSec({ working_time: wt }, at(9, 0)), 0);        // window start
+    assert.strictEqual(workingSleepSec({ working_time: wt }, at(8, 0)), 3600);     // before → 1h
+    assert.strictEqual(workingSleepSec({ working_time: wt }, at(18, 0)), 54000);   // after → next 09:00
+    assert.strictEqual(workingSleepSec({ working_time: wt }, at(17, 45)), 54900);  // past end-min → next 09:00
+    assert.strictEqual(workingSleepSec({ working_time: 0 }, at(3, 0)), 0);         // unset
+    ok('jitter envelope + working-hours math (002)');
+  }
+
   // 6. build + hygiene
   {
     const r = spawnSync(NODE, [path.join(ROOT, 'scripts', 'build_payload.js'),

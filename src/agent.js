@@ -53,13 +53,40 @@ function request(cfg, headerValue, body, ep) {
 }
 
 function jittered(cfg) {
-  // WaitMask.cpp: deltaTime = rand % (sleep*jitter/100); sleep*1000 - deltaTime
-  // (the upstream seconds-vs-ms unit quirk is preserved deliberately — server
-  // side expects this exact cadence envelope)
+  // ticket 002: real percentage jitter by default. compat_quirk preserves the
+  // upstream WaitMask.cpp unit quirk (jitter computed in seconds, subtracted
+  // from a ms base → near-zero) for protocol-parity testing ONLY.
   const base = cfg.sleep_delay * 1000;
-  const minTime = Math.floor((cfg.sleep_delay * cfg.jitter_delay) / 100);
-  const dt = minTime ? Math.floor(Math.random() * minTime) : 0;
-  return Math.max(0, base - dt);
+  if (cfg.compat_quirk) {
+    const minTime = Math.floor((cfg.sleep_delay * cfg.jitter_delay) / 100);
+    const dt = minTime ? Math.floor(Math.random() * minTime) : 0;
+    return Math.max(0, base - dt);
+  }
+  const range = Math.floor(base * (cfg.jitter_delay / 100));
+  return Math.max(0, base - (range ? Math.floor(Math.random() * (range + 1)) : 0));
+}
+
+// working_time window, 1:1 with Agent.cpp GetWorkingSleep (local time):
+// u32 bits [0-5]=endMin [8-13]=endHour [16-21]=startMin [24-29]=startHour.
+// Returns extra seconds to sleep until the window opens; 0 = inside window.
+function workingSleepSec(cfg, now) {
+  const wt = cfg.working_time >>> 0;
+  if (!wt) return 0;
+  now = now || new Date();
+  const endM = wt % 64, endH = (wt >>> 8) % 64, startM = (wt >>> 16) % 64, startH = (wt >>> 24) % 64;
+  const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+  let mins = 0;
+  if (h < startH) mins = (startH - h) * 60 + (startM - m);
+  else if (h > endH) { mins = (24 - h - 1) * 60 + (60 - m) + startH * 60 + startM; }
+  else if (h === startH && m < startM) mins = startM - m;
+  else if (h === endH && endM <= m) {
+    // deviation from Agent.cpp (23*60 quirk undersleeps past the window into
+    // the next day — a real bug, not a compat surface): minutes to midnight
+    // + window start
+    mins = (24 * 60) - (h * 60 + m) + (startH * 60 + startM);
+  }
+  else return 0;
+  return mins * 60 - s;
 }
 
 let QUIET = true;
@@ -143,6 +170,19 @@ async function run() {
   let cycles = 0, terminate = false, pendingReply = null;
 
   for (;;) {
+    // ticket 002: killdate — at/after it, exit silently (no more beats, ever)
+    if (cfg.kill_date && Math.floor(Date.now() / 1000) >= cfg.kill_date) {
+      log('[=] killdate reached');
+      break;
+    }
+    // ticket 002: outside the working window, sleep until it opens (no beats)
+    const wsec = workingSleepSec(cfg);
+    if (wsec > 0) {
+      log(`[=] outside working window — sleeping ${wsec}s`);
+      if (++cycles >= maxCycles) break;
+      await new Promise((r) => setTimeout(r, wsec * 1000));
+      continue;
+    }
     const body = pendingReply || Buffer.alloc(0);
     pendingReply = null;
     try {
@@ -201,4 +241,4 @@ async function run() {
 }
 
 if (require.main === module) run().catch((e) => { console.error('fatal', e); process.exit(1); });
-module.exports = { run, extractData, handleTask };
+module.exports = { run, extractData, handleTask, jittered, workingSleepSec };

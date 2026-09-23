@@ -1,6 +1,17 @@
 # 002: Real jitter + working-hours enforcement
 
-**Layer:** core runtime (network cadence) · **Status:** open · **Priority:** P2 · **Depends on:** —
+**Layer:** core runtime (network cadence) · **Status:** done 2026-09-23
+(suite 17/17; live e2e agent 13 on DT-MDE-TEST, MDE clean) · **Priority:** P2 · **Depends on:** —
+
+## Outcome notes
+- `jittered()`: real percentage jitter by default; `compat_quirk: true`
+  preserves the legacy near-zero envelope for protocol-parity testing.
+- `workingSleepSec()` ports Agent.cpp's packed working_time window
+  (startH/startM/endH/endM, local time). Deliberate deviation documented
+  in-code: the C++ `23*60` branch math undersleeps into the next day when
+  past the end-minute — ported the intent (sleep until tomorrow's window
+  start), not the bug.
+- killdate enforced: at/after epoch the loop exits silently before beating.
 
 ## Goal
 The beacon loop currently reproduces upstream's `WaitMask.cpp` unit quirk:

@@ -23,6 +23,7 @@ const DEFAULTS = {
   file_chunk_size: 0x80000,           // download chunk (profile chunksize)
   // noise
   debug: false,
+  compat_quirk: false,         // ticket 002: legacy near-zero-jitter envelope (protocol-parity tests only)
   // identity
   agent_type: 0x5f3a91c2,             // beacon watermark on OUR patched teamserver
                                       // (upstream stock: 0xbe4c0149 — overridden per op)
