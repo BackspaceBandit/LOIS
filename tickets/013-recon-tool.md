@@ -1,6 +1,19 @@
 # 013: recon.js — Electron target assessment tool
 
-**Layer:** delivery/tooling · **Status:** open · **Priority:** P2 · **Depends on:** —
+**Layer:** delivery/tooling · **Status:** done 2026-09-23 (validated against
+real VS Code/GHD installs on DT-MDE-TEST + non-Electron control; suite
+18/18) · **Priority:** P2 · **Depends on:** —
+
+## Outcome notes
+- `scripts/recon.js`: chunked sentinel scan (no 250 MB slurp), fuse
+  bitstring decode (empirical wire format: sentinel + version:u8 + len:u8 +
+  '0'/'1' bits), layout detection (loose vs asar via package.json — reads
+  INSIDE app.asar too via our zero-dep asar lib), route decision, updater
+  detection (Squirrel/NSIS/MSIX-hash), ESM-vs-CJS main detection (the 005
+  lesson), `--write` stubs a docs/targets profile.
+- Real-box results matched the hand-validated 005 findings exactly
+  (both `101100011`, both loose-file jack route; GHD updater=squirrel,
+  VS Code=nsis).
 
 ## Goal
 "Found a new program, can we inject?" should be a 30-second check, not

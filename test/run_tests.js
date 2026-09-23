@@ -254,6 +254,27 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     ok('injector hook + clean round-trip (005)');
   }
 
+  // 6e. recon: fuse wire parse + route decision (013)
+  {
+    const os = require('os');
+    const recon = require('../scripts/recon.js');
+    const fake = fs.mkdtempSync(path.join(os.tmpdir(), 'lw-recon-'));
+    // synthetic binary: junk + sentinel + version 1 + len 9 + bits
+    const bits = '101100011';
+    const bin = Buffer.concat([Buffer.alloc(1024, 0x41), Buffer.from(recon.SENTINEL),
+                               Buffer.from([1, bits.length]), Buffer.from(bits)]);
+    const exePath = path.join(fake, 'FakeApp.exe');
+    fs.writeFileSync(exePath, bin);
+    const got = recon.readFuses(exePath);
+    assert.strictEqual(got.bits, bits);
+    assert.strictEqual(got.fuses.runAsNode, true);
+    assert.strictEqual(got.fuses.enableEmbeddedAsarIntegrityValidation, false);
+    assert.strictEqual(got.fuses.onlyLoadAppFromAsar, false);
+    assert.strictEqual(got.fuses.grantFileProtocolExtraPrivileges, true);
+    fs.rmSync(fake, { recursive: true, force: true });
+    ok('recon fuse parse (013)');
+  }
+
   // 7. full round-trip: mock listener + built bundle agent
   {
     const port = 21000 + (process.pid % 20000);
