@@ -1,6 +1,6 @@
 # 018: node_agent-style teamserver extender (server-side payload generation)
 
-**Layer:** integration · **Status:** open · **Priority:** P3 · **Depends on:** 004, 008, 012
+**Layer:** integration · **Status:** SKIPPED 2026-09-24 (operator decision — not needed for the current op set) · **Priority:** P3 · **Depends on:** 004, 008, 012
 
 ## Why
 Today a LOIS payload is built locally (`build_payload.js`) and injected by

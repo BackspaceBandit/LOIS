@@ -1,6 +1,6 @@
 # 016: Optional COFF/BOF addon (non-Airlock targets only)
 
-**Layer:** capability · **Status:** open · **Priority:** P3 · **Depends on:** 001
+**Layer:** capability · **Status:** SKIPPED 2026-09-24 (operator decision — not needed for the current op set) · **Priority:** P3 · **Depends on:** 001
 
 ## Why
 BOF execution requires a native `.node` addon (COFF loader) — which is a DLL

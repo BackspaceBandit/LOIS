@@ -34,11 +34,11 @@ persistence telemetry, per-process network attribution.
 
 | # | Ticket | Pri | Notes |
 |---|--------|-----|-------|
-| 014 | NaX HTTP channel transport | P1 (real ops) | replaces signatured stock channel; needs 001/002 first |
-| 015 | SOCKS5 pivot (tunnel tasks) | P2 | highest-value capability gap; pure-JS `net` |
-| 016 | COFF/BOF addon | P3 | NEVER on Airlock/CS targets (native load) |
-| 017 | run-as-node persistence helper | P3 | lab/permissive only — adds an autostart artifact by design |
-| 018 | teamserver extender | P3 | may close as wontfix (local build is fine) |
+| 014 | NaX HTTP channel transport | done 2026-09-24 | live-validated vs testhttp2 from DT-MDE-TEST |
+| 015 | SOCKS5 pivot (tunnel tasks) | done 2026-09-23 | live pivot through MDE-box beacon |
+| 016 | COFF/BOF addon | SKIPPED | operator decision 2026-09-24 — BOFs via NaX instead |
+| 017 | run-as-node persistence helper | SKIPPED | operator decision 2026-09-24 |
+| 018 | teamserver extender | SKIPPED | operator decision 2026-09-24 — local builds stay |
 
 Rules of the house: one ticket = one change; suite + MDE gate green before
 any ticket is marked done; ticket files updated when scope changes.

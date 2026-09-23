@@ -1,6 +1,6 @@
 # 017: ELECTRON_RUN_AS_NODE launcher-persistence helper (lab/permissive only)
 
-**Layer:** delivery · **Status:** open · **Priority:** P3 · **Depends on:** 006 (documents the CS rule this violates)
+**Layer:** delivery · **Status:** SKIPPED 2026-09-24 (operator decision — not needed for the current op set) · **Priority:** P3 · **Depends on:** 006 (documents the CS rule this violates)
 
 ## Why
 The README roadmap lists a launcher/persistence helper for the

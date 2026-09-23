@@ -79,13 +79,11 @@ Docs: `docs/opsec.md` (read before prod), `docs/runbook.md` (re-injection),
       profile live vs testhttp2 from DT-MDE-TEST, MDE clean)
 - [x] SOCKS5 pivot over the tunnel channel — ticket 015 (done 2026-09-23:
       connect/write/pause/resume/close, live pivot through an MDE-box beacon)
-- [ ] ELECTRON_RUN_AS_NODE launcher-persistence helper (Run key / schtask;
-      lab/permissive targets only — forbidden on CS targets by ticket 006) —
-      ticket 017
-- [ ] optional COFF/BOF addon (non-Airlock targets only — native .node loads
-      are exactly what Airlock blocks; keep it OUT of the default build) —
-      ticket 016
-- [ ] `node_agent`-style teamserver extender for GUI/REST payload generation
-      — ticket 018
+- [ ] ELECTRON_RUN_AS_NODE launcher-persistence helper — ticket 017
+      (SKIPPED 2026-09-24, operator decision)
+- [ ] optional COFF/BOF addon — ticket 016 (SKIPPED 2026-09-24, operator
+      decision: BOFs via the NaX beacon instead)
+- [ ] `node_agent`-style teamserver extender — ticket 018 (SKIPPED
+      2026-09-24, operator decision: local builds stay)
 
 Opsec hardening plan (CS prod): see `tickets/README.md` (001–013).
