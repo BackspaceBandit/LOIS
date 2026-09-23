@@ -1,6 +1,16 @@
 # 010: MDE regression gate (one-command winbox e2e)
 
-**Layer:** testing/process · **Status:** open · **Priority:** P1 · **Depends on:** —
+**Layer:** testing/process · **Status:** done 2026-09-23 (gate PASS 9 steps
+in ~30 s against DT-MDE-TEST) · **Priority:** P1 · **Depends on:** —
+
+## Outcome notes
+- `scripts/gate_mde.sh`: env-driven (no secrets in repo), fail-closed,
+  reuses an existing API tunnel or starts its own, WMI launch (not
+  schtasks — learned: never runs without an interactive session),
+  registration detected by id>max + proc + box IP, `ui:false` tasking,
+  MDE verdict via Get-MpThreatDetection, full cleanup.
+- First full run: PASS (build → register → pwd round-trip → MDE clean →
+  cleanup) in 27 s.
 
 ## Goal
 Every LOIS change must be re-clearable against the MDE box in one command.
