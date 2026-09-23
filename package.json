@@ -1,0 +1,12 @@
+{
+  "name": "lois",
+  "version": "0.1.0",
+  "description": "Pure-JS Adaptix beacon living inside trusted Electron apps (Airlock/CS environments)",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "node scripts/build_payload.js",
+    "test": "node test/run_tests.js"
+  }
+}
