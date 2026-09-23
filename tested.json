@@ -1,0 +1,24 @@
+{
+  "mde": {
+    "last_tested": "2026-09-23",
+    "config_sha256": "998ef156b07e052340cee7e694d04f24148cbdd9b2cc46e0ff4b26eb74812d26",
+    "build": "encrypted bake, minified, shellout off",
+    "result": "pass",
+    "tester": "mschf",
+    "note": "loistest e2e: register+pwd+ls+mkdir from DT-MDE-TEST (agents 8/13/14), Get-MpThreatDetection empty; gate_mde.sh PASS"
+  },
+  "crowdstrike": {
+    "last_tested": null,
+    "config_sha256": null,
+    "result": "untested",
+    "tester": null,
+    "note": "no CS lab yet (ticket 011)"
+  },
+  "sentinelone": {
+    "last_tested": null,
+    "config_sha256": null,
+    "result": "untested",
+    "tester": null,
+    "note": "no S1 lab yet (ticket 011)"
+  }
+}

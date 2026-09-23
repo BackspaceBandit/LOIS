@@ -1,6 +1,6 @@
 # 009: Residual network-risk documentation
 
-**Layer:** docs/opsec · **Status:** open · **Priority:** P3 · **Depends on:** 008
+**Layer:** docs/opsec · **Status:** done 2026-09-23 (docs/opsec.md — residual network risk + operator mistake checklist) · **Priority:** P3 · **Depends on:** 008
 
 ## Goal
 Write down the risk we CANNOT engineer away so it's a conscious decision:

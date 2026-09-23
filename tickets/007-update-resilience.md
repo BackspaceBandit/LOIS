@@ -1,6 +1,6 @@
 # 007: Update-resilience runbook + re-inject idempotence
 
-**Layer:** delivery · **Status:** open · **Priority:** P2 · **Depends on:** 005
+**Layer:** delivery · **Status:** done 2026-09-23 (docs/runbook.md; re-inject idempotence asserted in suite 6d; clean+reinject cycle also exercised live during 005) · **Priority:** P2 · **Depends on:** 005
 
 ## Goal
 App updates kill the hook silently: Squirrel replaces the whole versioned

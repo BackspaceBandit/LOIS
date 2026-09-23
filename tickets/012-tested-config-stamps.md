@@ -1,6 +1,6 @@
 # 012: Tested-config stamps per EDR
 
-**Layer:** process/tooling · **Status:** open · **Priority:** P2 · **Depends on:** 010
+**Layer:** process/tooling · **Status:** done 2026-09-23 (tested.json + build-time stamp print; MDE pass recorded, CS/S1 marked untested) · **Priority:** P2 · **Depends on:** 010
 
 ## Goal
 Same idea as the HOI.SIN EDR presets: a LOIS build must carry a visible,

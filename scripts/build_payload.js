@@ -230,4 +230,31 @@ function findEsbuild() {
     process.exit(1);
   }
   console.log('[build] hygiene check clean');
+
+  // ---- ticket 012: tested-config stamp (informational, never blocks) --------
+  // The stamp hashes the EFFECTIVE baked config (key-sorted canonical JSON),
+  // not the artifact bytes (tokens/keys randomize per build by design).
+  if (bakeIdx >= 0) {
+    try {
+      const sortDeep = (o) => Array.isArray(o) ? o.map(sortDeep)
+        : (o && typeof o === 'object'
+            ? Object.fromEntries(Object.keys(o).sort().map((k) => [k, sortDeep(o[k])])) : o);
+      const cfgHash = crypto.createHash('sha256')
+        .update(JSON.stringify(sortDeep(JSON.parse(fs.readFileSync(args[bakeIdx + 1], 'utf8')))))
+        .digest('hex');
+      const testedPath = path.join(ROOT, 'tested.json');
+      const tested = fs.existsSync(testedPath) ? JSON.parse(fs.readFileSync(testedPath, 'utf8')) : {};
+      let stamped = false;
+      for (const [edr, rec] of Object.entries(tested)) {
+        if (rec.config_sha256 === cfgHash && rec.result === 'pass') {
+          console.log(`[tested] ${edr}: PASS ${rec.last_tested} (tester: ${rec.tester}) — config matches`);
+          stamped = true;
+        }
+      }
+      if (!stamped)
+        console.log('[tested] !! UNTESTED build shape — no passing record matches this config. Run the gate before deploying.');
+    } catch (e) { console.log('[tested] stamp check failed (non-fatal): ' + e.message); }
+  } else {
+    console.log('[tested] unbaked build — dev only, not deployable');
+  }
 })();
